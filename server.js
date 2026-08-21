@@ -1,38 +1,56 @@
 const express = require("express");
 const path = require("path");
+const https = require("https");
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// استخدام نطاق مجاني ومستقر يمنع حظر Cloudflare على خوادم Render
-const API = "https://www.1secmail.net/api/v1/";
+const API_BASE = "https://www.1secmail.com/api/v1/";
+
+// وكيل يتيح الاتصال وتجاوز مشاكل شهادات SSL والحظر
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false
+});
 
 app.use(express.static(__dirname));
 
-async function api(params) {
-  const u = new URL(API);
-  Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
-  const c = new AbortController(), t = setTimeout(() => c.abort(), 15000);
-  
-  try {
-    const r = await fetch(u, {
+function api(params) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(API_BASE);
+    Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
+
+    const options = {
+      hostname: u.hostname,
+      path: u.pathname + u.search,
+      method: "GET",
+      agent: httpsAgent,
       headers: {
         "Accept": "application/json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      },
-      signal: c.signal
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          return reject(new Error(`الخدمة الخارجية HTTP ${res.statusCode}`));
+        }
+        try {
+          resolve(JSON.parse(data));
+        } catch {
+          reject(new Error("استجابة غير صالحة من الخدمة الخارجية"));
+        }
+      });
     });
-    
-    const text = await r.text();
-    if (!r.ok) throw Error(`الخدمة الخارجية HTTP ${r.status}`);
-    
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw Error("استجابة غير صالحة من الخدمة الخارجية");
-    }
-  } finally {
-    clearTimeout(t);
-  }
+
+    req.on("error", (err) => reject(err));
+    req.setTimeout(15000, () => {
+      req.destroy();
+      reject(new Error("AbortError"));
+    });
+    req.end();
+  });
 }
 
 app.get("/api/status", (req, res) => {
@@ -56,7 +74,7 @@ app.get("/api/new", async (req, res) => {
     res.status(502).json({
       success: false,
       error: "تعذر إنشاء البريد المؤقت",
-      details: e.name === "AbortError" ? "انتهت مهلة الاتصال" : e.message
+      details: e.message === "AbortError" ? "انتهت مهلة الاتصال" : e.message
     });
   }
 });
@@ -72,7 +90,7 @@ app.get("/api/messages", async (req, res) => {
     res.status(502).json({
       success: false,
       error: "تعذر جلب الرسائل",
-      details: e.name === "AbortError" ? "انتهت مهلة الاتصال" : e.message
+      details: e.message === "AbortError" ? "انتهت مهلة الاتصال" : e.message
     });
   }
 });
@@ -88,7 +106,7 @@ app.get("/api/message", async (req, res) => {
     res.status(502).json({
       success: false,
       error: "تعذر قراءة الرسالة",
-      details: e.name === "AbortError" ? "انتهت مهلة الاتصال" : e.message
+      details: e.message === "AbortError" ? "انتهت مهلة الاتصال" : e.message
     });
   }
 });
