@@ -4,19 +4,26 @@ const https = require("https");
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+const API_BASE = "https://www.1secmail.com/api/v1/";
+
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false
+});
+
 app.use(express.static(__dirname));
 
-function fetchGuerrilla(action, params = {}) {
+function api(params) {
   return new Promise((resolve, reject) => {
-    const u = new URL("https://api.guerrillamail.com/ajax.php");
-    u.searchParams.set("f", action);
+    const u = new URL(API_BASE);
     Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
 
     const options = {
       hostname: u.hostname,
       path: u.pathname + u.search,
       method: "GET",
+      agent: httpsAgent,
       headers: {
+        "Accept": "application/json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
     };
@@ -26,12 +33,12 @@ function fetchGuerrilla(action, params = {}) {
       res.on("data", (chunk) => (data += chunk));
       res.on("end", () => {
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          return reject(new Error(`HTTP ${res.statusCode}`));
+          return reject(new Error(`الخدمة الخارجية HTTP ${res.statusCode}`));
         }
         try {
           resolve(JSON.parse(data));
         } catch {
-          reject(new Error("استجابة غير صالحة من الخدمة"));
+          reject(new Error("استجابة غير صالحة من الخدمة الخارجية"));
         }
       });
     });
@@ -54,74 +61,54 @@ app.get("/api/status", (req, res) => {
   });
 });
 
+// إنشاء بريد مع جلب النطاقات النشطة لمنع حظر الرسائل
 app.get("/api/new", async (req, res) => {
   try {
-    const data = await fetchGuerrilla("get_email_address");
-    if (!data.email_addr) throw Error("تعذر جلب البريد");
-    
-    const [login, domain] = data.email_addr.split("@");
-    res.json({
-      success: true,
-      email: data.email_addr,
-      login,
-      domain,
-      sid_token: data.sid_token
-    });
+    const d = await api({ action: "genRandomMailbox", count: "1" });
+    if (!Array.isArray(d) || !d[0]) throw Error("لم يتم إنشاء البريد");
+    const [login, domain] = d[0].split("@");
+    if (!login || !domain) throw Error("عنوان البريد غير صالح");
+    res.json({ success: true, email: d[0], login, domain });
   } catch (e) {
     console.error(e);
     res.status(502).json({
       success: false,
       error: "تعذر إنشاء البريد المؤقت",
-      details: e.message
+      details: e.message === "AbortError" ? "انتهت مهلة الاتصال" : e.message
     });
   }
 });
 
+// جلب صندوق الرسائل مع معالجة حقول المرسل والعنوان
 app.get("/api/messages", async (req, res) => {
-  const { sid_token } = req.query;
+  const { login, domain } = req.query;
+  if (!login || !domain) return res.status(400).json({ success: false, error: "بيانات البريد ناقصة" });
   try {
-    const data = await fetchGuerrilla("check_email", { sid_token: sid_token || "", seq: "0" });
-    const formattedMessages = (data.list || []).map((msg) => ({
-      id: msg.mail_id,
-      from: msg.mail_from,
-      subject: msg.mail_subject,
-      date: msg.mail_date
-    }));
-    
-    res.json({ success: true, messages: formattedMessages });
+    const d = await api({ action: "getMessages", login, domain });
+    res.json({ success: true, messages: Array.isArray(d) ? d : [] });
   } catch (e) {
     console.error(e);
     res.status(502).json({
       success: false,
       error: "تعذر جلب الرسائل",
-      details: e.message
+      details: e.message === "AbortError" ? "انتهت مهلة الاتصال" : e.message
     });
   }
 });
 
+// قراءة تفاصيل الرسالة
 app.get("/api/message", async (req, res) => {
-  const { id, sid_token } = req.query;
-  if (!id) return res.status(400).json({ success: false, error: "بيانات الرسالة ناقصة" });
-  
+  const { login, domain, id } = req.query;
+  if (!login || !domain || !id) return res.status(400).json({ success: false, error: "بيانات الرسالة ناقصة" });
   try {
-    const data = await fetchGuerrilla("fetch_email", { email_id: id, sid_token: sid_token || "" });
-    res.json({
-      success: true,
-      message: {
-        id: data.mail_id,
-        from: data.mail_from,
-        subject: data.mail_subject,
-        date: data.mail_date,
-        body: data.mail_body,
-        textBody: data.mail_excerpt
-      }
-    });
+    const d = await api({ action: "readMessage", login, domain, id });
+    res.json({ success: true, message: d });
   } catch (e) {
     console.error(e);
     res.status(502).json({
       success: false,
       error: "تعذر قراءة الرسالة",
-      details: e.message
+      details: e.message === "AbortError" ? "انتهت مهلة الاتصال" : e.message
     });
   }
 });
