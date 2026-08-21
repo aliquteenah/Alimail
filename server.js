@@ -91,39 +91,16 @@ app.get("/api/messages", async (req, res) => {
     const parsed = await requestMailTm("/messages", "GET", null, token);
     const rawMsgs = parsed["hydra:member"] || [];
 
-    // جلب التفاصيل الكاملة لكل رسالة تلقائياً لدعم الواجهة
-    const fullMessages = await Promise.all(
-      rawMsgs.map(async (m) => {
-        try {
-          const detail = await requestMailTm(`/messages/${m.id}`, "GET", null, token);
-          const bodyContent = detail.intro || (Array.isArray(detail.html) && detail.html[0]) || detail.text || "";
-          const sender = detail.from?.address || m.from?.address || "مرسل مجهول";
+    // تبسيط جلب القائمة لجعل الأداء أسرع وتجنب حظر الـ IP
+    const simpleMessages = rawMsgs.map((m) => ({
+      id: String(m.id),
+      from: m.from?.address || "مرسل مجهول",
+      subject: m.subject || "بدون عنوان",
+      intro: m.intro || "",
+      date: m.createdAt
+    }));
 
-          return {
-            id: m.id,
-            from: sender,
-            subject: detail.subject || m.subject || "بدون عنوان",
-            date: detail.createdAt || m.createdAt,
-            intro: bodyContent,
-            body: bodyContent,
-            textBody: detail.text || bodyContent,
-            html: bodyContent
-          };
-        } catch {
-          return {
-            id: m.id,
-            from: m.from?.address || "مرسل مجهول",
-            subject: m.subject || "بدون عنوان",
-            date: m.createdAt,
-            intro: m.intro || "",
-            body: m.intro || "",
-            textBody: m.intro || ""
-          };
-        }
-      })
-    );
-
-    res.json({ success: true, messages: fullMessages });
+    res.json({ success: true, messages: simpleMessages });
   } catch (e) {
     res.json({ success: true, messages: [] });
   }
@@ -144,7 +121,7 @@ app.get("/api/message", async (req, res) => {
     res.json({
       success: true,
       message: {
-        id: m.id,
+        id: String(m.id),
         from: sender,
         subject: m.subject || "بدون عنوان",
         date: m.createdAt || new Date().toISOString(),
