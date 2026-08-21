@@ -90,16 +90,40 @@ app.get("/api/messages", async (req, res) => {
   try {
     const parsed = await requestMailTm("/messages", "GET", null, token);
     const rawMsgs = parsed["hydra:member"] || [];
-    const messages = rawMsgs.map((m) => {
-      const fromAddr = m.from?.address || m.from?.name || "مرسل مجهول";
-      return {
-        id: m.id,
-        from: fromAddr,
-        subject: m.subject || "بدون عنوان",
-        date: m.createdAt || m.updatedAt || new Date().toISOString()
-      };
-    });
-    res.json({ success: true, messages });
+
+    // جلب التفاصيل الكاملة لكل رسالة تلقائياً لدعم الواجهة
+    const fullMessages = await Promise.all(
+      rawMsgs.map(async (m) => {
+        try {
+          const detail = await requestMailTm(`/messages/${m.id}`, "GET", null, token);
+          const bodyContent = detail.intro || (Array.isArray(detail.html) && detail.html[0]) || detail.text || "";
+          const sender = detail.from?.address || m.from?.address || "مرسل مجهول";
+
+          return {
+            id: m.id,
+            from: sender,
+            subject: detail.subject || m.subject || "بدون عنوان",
+            date: detail.createdAt || m.createdAt,
+            intro: bodyContent,
+            body: bodyContent,
+            textBody: detail.text || bodyContent,
+            html: bodyContent
+          };
+        } catch {
+          return {
+            id: m.id,
+            from: m.from?.address || "مرسل مجهول",
+            subject: m.subject || "بدون عنوان",
+            date: m.createdAt,
+            intro: m.intro || "",
+            body: m.intro || "",
+            textBody: m.intro || ""
+          };
+        }
+      })
+    );
+
+    res.json({ success: true, messages: fullMessages });
   } catch (e) {
     res.json({ success: true, messages: [] });
   }
@@ -114,31 +138,19 @@ app.get("/api/message", async (req, res) => {
 
   try {
     const m = await requestMailTm(`/messages/${id}`, "GET", null, token);
-    
-    // استخراج عنوان المرسل بدقة
-    const senderAddress = m.from?.address || m.from?.name || "مرسل مجهول";
-    
-    // استخراج نص الرسالة أو HTML أو المقدمة
-    let bodyText = "";
-    if (Array.isArray(m.html) && m.html.length > 0 && m.html[0]) {
-      bodyText = m.html[0];
-    } else if (m.text) {
-      bodyText = m.text;
-    } else if (m.intro) {
-      bodyText = m.intro;
-    } else {
-      bodyText = "لا يوجد محتوى للرسالة";
-    }
+    const bodyContent = (Array.isArray(m.html) && m.html[0]) || m.text || m.intro || "لا يوجد محتوى للرسالة";
+    const sender = m.from?.address || "مرسل مجهول";
 
     res.json({
       success: true,
       message: {
         id: m.id,
-        from: senderAddress,
+        from: sender,
         subject: m.subject || "بدون عنوان",
-        date: m.createdAt || m.updatedAt || new Date().toISOString(),
-        body: bodyText,
-        textBody: m.text || m.intro || bodyText
+        date: m.createdAt || new Date().toISOString(),
+        body: bodyContent,
+        textBody: m.text || m.intro || bodyContent,
+        html: bodyContent
       }
     });
   } catch (e) {
