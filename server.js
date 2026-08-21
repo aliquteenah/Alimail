@@ -1,23 +1,31 @@
 const express = require("express");
-const path = require("path");
 const https = require("https");
 const app = express();
 const PORT = process.env.PORT || 8080;
 
 app.use(express.static(__dirname));
 
-function fetchGuerrilla(action, params = {}) {
-  return new Promise((resolve, reject) => {
-    const u = new URL("https://api.guerrillamail.com/ajax.php");
-    u.searchParams.set("f", action);
-    Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
+// وكيل يتجاوز حظر القيود والشهادات
+const agent = new https.Agent({ rejectUnauthorized: false });
 
+// قائمة السيرفرات البديلة المتاحة لنفس الخدمة
+const MIRRORS = [
+  "https://www.1secmail.com/api/v1/",
+  "https://www.1secmail.org/api/v1/",
+  "https://www.1secmail.net/api/v1/"
+];
+
+function requestApi(apiUrl) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(apiUrl);
     const options = {
       hostname: u.hostname,
       path: u.pathname + u.search,
       method: "GET",
+      agent: agent,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json"
       }
     };
 
@@ -25,105 +33,77 @@ function fetchGuerrilla(action, params = {}) {
       let data = "";
       res.on("data", (chunk) => (data += chunk));
       res.on("end", () => {
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          return reject(new Error(`HTTP ${res.statusCode}`));
-        }
-        try {
-          resolve(JSON.parse(data));
-        } catch {
-          reject(new Error("استجابة غير صالحة من الخدمة الخارجية"));
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            resolve(JSON.parse(data));
+          } catch {
+            reject(new Error("JSON Parse Error"));
+          }
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}`));
         }
       });
     });
 
     req.on("error", (err) => reject(err));
-    req.setTimeout(15000, () => {
+    req.setTimeout(8000, () => {
       req.destroy();
-      reject(new Error("انتهت مهلة الاتصال"));
+      reject(new Error("Timeout"));
     });
     req.end();
   });
 }
 
+// دالة تجربة المصادر التلقائية
+async function fetchWithFallback(params) {
+  for (const mirror of MIRRORS) {
+    try {
+      const u = new URL(mirror);
+      Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
+      const result = await requestApi(u.href);
+      return result;
+    } catch (e) {
+      // التجربة على السيرفر التالي
+    }
+  }
+  throw new Error("تعذر الاتصال بجميع الخوادم المتاحة");
+}
+
 app.get("/api/status", (req, res) => {
-  res.json({ success: true, service: "ALI MAIL", server: "online", time: new Date().toISOString() });
+  res.json({ success: true, service: "ALI MAIL", server: "online" });
 });
 
-// إنشاء بريد بتنسيق متوافق تماماً مع الواجهة
 app.get("/api/new", async (req, res) => {
   try {
-    const data = await fetchGuerrilla("get_email_address");
-    if (!data.email_addr) throw Error("تعذر جلب البريد");
-    
-    const [login, domain] = data.email_addr.split("@");
-    res.json({
-      success: true,
-      email: data.email_addr,
-      login: login,
-      domain: domain,
-      sid_token: data.sid_token
-    });
+    const d = await fetchWithFallback({ action: "genRandomMailbox", count: "1" });
+    if (!Array.isArray(d) || !d[0]) throw Error("لم يتم التوليد");
+    const [login, domain] = d[0].split("@");
+    res.json({ success: true, email: d[0], login, domain });
   } catch (e) {
-    console.error(e);
-    res.status(502).json({
-      success: false,
-      error: "تعذر إنشاء البريد المؤقت",
-      details: e.message
-    });
+    res.status(502).json({ success: false, error: "تعذر إنشاء البريد", details: e.message });
   }
 });
 
-// جلب الرسائل تحويلها لنفس الهيكل المطلوب
 app.get("/api/messages", async (req, res) => {
-  const { sid_token } = req.query;
+  const { login, domain } = req.query;
+  if (!login || !domain) return res.status(400).json({ success: false, error: "بيانات ناقصة" });
   try {
-    const data = await fetchGuerrilla("check_email", { sid_token: sid_token || "", seq: "0" });
-    const messages = (data.list || []).map((msg) => ({
-      id: msg.mail_id,
-      from: msg.mail_from,
-      subject: msg.mail_subject,
-      date: msg.mail_date
-    }));
-    
-    res.json({ success: true, messages });
+    const d = await fetchWithFallback({ action: "getMessages", login, domain });
+    res.json({ success: true, messages: Array.isArray(d) ? d : [] });
   } catch (e) {
-    console.error(e);
-    res.status(502).json({
-      success: false,
-      error: "تعذر جلب الرسائل",
-      details: e.message
-    });
+    res.status(502).json({ success: false, error: "تعذر جلب الرسائل", details: e.message });
   }
 });
 
-// قراءة الرسالة
 app.get("/api/message", async (req, res) => {
-  const { id, sid_token } = req.query;
-  if (!id) return res.status(400).json({ success: false, error: "بيانات الرسالة ناقصة" });
-  
+  const { login, domain, id } = req.query;
+  if (!login || !domain || !id) return res.status(400).json({ success: false, error: "بيانات ناقصة" });
   try {
-    const data = await fetchGuerrilla("fetch_email", { email_id: id, sid_token: sid_token || "" });
-    res.json({
-      success: true,
-      message: {
-        id: data.mail_id,
-        from: data.mail_from,
-        subject: data.mail_subject,
-        date: data.mail_date,
-        body: data.mail_body || data.mail_excerpt,
-        textBody: data.mail_excerpt
-      }
-    });
+    const d = await fetchWithFallback({ action: "readMessage", login, domain, id });
+    res.json({ success: true, message: d });
   } catch (e) {
-    console.error(e);
-    res.status(502).json({
-      success: false,
-      error: "تعذر قراءة الرسالة",
-      details: e.message
-    });
+    res.status(502).json({ success: false, error: "تعذر قراءة الرسالة", details: e.message });
   }
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`ALI MAIL running on port ${PORT}`);
-});
+app.listen(PORT, "0.0.0.0", () => console.log(`Server ready on port ${PORT}`));
