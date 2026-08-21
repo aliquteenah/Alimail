@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#020204">
+<title>ALI ⊗ MAIL | TEMP MAIL</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Orbitron:wght@700;900&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--gold-light:#fff3a1;--gold:#d4af37;--cyan:#00f3ff;--green:#00ff88;--red:#ff3b5c;--bg:#020204}
+*{box-sizing:border-box;margin:0;padding:0;font-family:Tajawal,sans-serif}
+body{background:var(--bg);min-height:100vh;display:flex;align-items:center;justify-content:center;color:#fff;padding:12px;overflow-x:hidden}
+#canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.glow{position:fixed;width:600px;height:600px;background:radial-gradient(circle,rgba(212,175,55,.15),rgba(0,243,255,.07) 40%,transparent 70%);filter:blur(80px);z-index:0}
+.card{position:relative;z-index:2;width:100%;max-width:520px;padding:2px;border-radius:32px;background:linear-gradient(135deg,rgba(212,175,55,.7),rgba(255,255,255,.04),rgba(0,243,255,.6));box-shadow:0 30px 100px #000}
+.inner{background:rgba(6,9,15,.94);backdrop-filter:blur(25px);border-radius:30px;padding:34px 22px;text-align:center}
+.crown{font-size:2.2rem}.title{font-family:Orbitron,sans-serif;font-size:2.2rem;letter-spacing:3px;background:linear-gradient(#fff,var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:5px 0 8px}
+.badge{display:inline-block;color:var(--gold-light);border:1px solid rgba(212,175,55,.4);background:rgba(212,175,55,.12);padding:5px 13px;border-radius:50px;font-size:.68rem;letter-spacing:1px;margin-bottom:22px}
+.email{width:100%;padding:16px;background:#02060c;border:1px solid rgba(212,175,55,.35);border-radius:16px;color:var(--cyan);font:700 .95rem Orbitron,sans-serif;text-align:center;outline:none;margin-bottom:14px}
+.buttons{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:20px}
+button{border:0;border-radius:13px;padding:14px 7px;font-weight:900;cursor:pointer;min-height:50px}
+button:disabled{opacity:.5}.gold{background:linear-gradient(135deg,var(--gold-light),var(--gold));color:#000}.refresh{background:rgba(0,255,136,.06);border:1px solid rgba(0,255,136,.3);color:var(--green)}.new{background:rgba(0,243,255,.06);border:1px solid rgba(0,243,255,.3);color:var(--cyan)}
+.inbox{background:rgba(2,6,12,.7);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:18px;min-height:190px;text-align:right}
+.inbox-head{display:flex;justify-content:space-between;color:#94a3b8;font-size:.9rem;margin-bottom:15px}.dot{width:8px;height:8px;background:var(--green);border-radius:50%;box-shadow:0 0 10px var(--green)}
+.center{text-align:center;color:#64748b;padding:32px 0}.msg{background:rgba(255,255,255,.03);border:1px solid rgba(212,175,55,.2);padding:12px;border-radius:12px;margin-bottom:9px;cursor:pointer}.from{color:var(--gold-light);font-weight:900;direction:ltr;text-align:left;overflow:hidden;text-overflow:ellipsis}.subject{color:#fff;margin-top:4px;overflow:hidden;text-overflow:ellipsis}
+.status{margin-top:13px;color:#64748b;font-size:.75rem;display:flex;gap:6px;justify-content:center;align-items:center}.sdot{width:6px;height:6px;background:var(--green);border-radius:50%;box-shadow:0 0 7px var(--green)}
+.toast{position:fixed;top:-100px;left:50%;transform:translateX(-50%);z-index:20;background:#070b12;border:1px solid var(--green);color:var(--green);padding:13px 20px;border-radius:50px;font-weight:900;transition:.35s;max-width:90%;text-align:center}.toast.show{top:25px}.toast.error{border-color:var(--red);color:var(--red)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:30;display:none;align-items:center;justify-content:center;padding:15px}.modal.show{display:flex}.box{background:#070b12;border:1px solid rgba(212,175,55,.45);border-radius:20px;width:100%;max-width:520px;max-height:85vh;overflow:auto;padding:20px}.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.close{width:38px;height:38px;border-radius:50%;padding:0;background:#ffffff12;color:#fff}.meta{background:#ffffff08;padding:12px;border-radius:12px;line-height:1.9;margin-bottom:12px;color:#cbd5e1}.body{white-space:pre-wrap;word-break:break-word;background:#0005;padding:14px;border-radius:12px;line-height:1.8;color:#f1f5f9}
+.spin{display:inline-block;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(-360deg)}}
+@media(max-width:420px){.inner{padding:28px 15px}.title{font-size:1.8rem}.badge{font-size:.6rem}.buttons button{font-size:.76rem}}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas><div class="glow"></div>
+<div class="card"><div class="inner">
+<div class="crown">👑</div>
+<h1 class="title">ALI ⊗ MAIL</h1>
+<div class="badge">✦ REAL TEMP MAIL SYSTEM VIP ✦</div>
+<input id="email" class="email" readonly value="جاري تشغيل النظام...">
+<div class="buttons">
+<button class="gold" onclick="copyEmail()">📋 نسخ</button>
+<button id="refreshBtn" class="refresh" onclick="refreshInbox()">🔄 تحديث</button>
+<button id="newBtn" class="new" onclick="newMail()">✨ جديد</button>
+</div>
+<div class="inbox">
+<div class="inbox-head"><span>صندوق الرسائل الواردة</span><span class="dot"></span></div>
+<div id="inbox" class="center">جاري الاتصال بالخادم...</div>
+</div>
+<div class="status"><span class="sdot"></span><span id="status">جاري فحص الخادم...</span></div>
+</div></div>
+<div id="toast" class="toast"></div>
+<div id="modal" class="modal" onclick="closeModal(event)"><div class="box" onclick="event.stopPropagation()"><div class="head"><b style="color:var(--gold-light)">📨 الرسالة</b><button class="close" onclick="closeMessage()">✕</button></div><div id="content"></div></div></div>
+<script>
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');let ps=[];
+function resize(){canvas.width=innerWidth;canvas.height=innerHeight}addEventListener('resize',resize);resize();
+for(let i=0;i<60;i++)ps.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,s:Math.random()*1.8+.5,dx:Math.random()*.6-.3,dy:Math.random()*.6-.3,c:Math.random()>.5?'#d4af37':'#00f3ff'});
+(function anim(){ctx.clearRect(0,0,canvas.width,canvas.height);ps.forEach(p=>{p.x+=p.dx;p.y+=p.dy;if(p.x<0)p.x=canvas.width;if(p.x>canvas.width)p.x=0;if(p.y<0)p.y=canvas.height;if(p.y>canvas.height)p.y=0;ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,p.s,0,Math.PI*2);ctx.fill()});requestAnimationFrame(anim)})();
+let login='',domain='',timer;
+const $=id=>document.getElementById(id);
+function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function toast(m,error=false){$('toast').textContent=m;$('toast').classList.toggle('error',error);$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2800)}
+async function jsonFetch(url){const r=await fetch(url,{cache:'no-store'});let d={};try{d=await r.json()}catch{}if(!r.ok||!d.success)throw Error(d.details||d.error||`HTTP ${r.status}`);return d}
+async function check(){try{await jsonFetch('/api/status');$('status').textContent='الخادم متصل'}catch(e){$('status').textContent='الخادم غير متصل';console.error(e)}}
+async function newMail(){
+$('newBtn').disabled=true;$('email').value='جاري إنشاء البريد...';$('inbox').className='center';$('inbox').textContent='جاري إنشاء البريد المؤقت...';login='';domain='';
+try{let d=await jsonFetch('/api/new');login=d.login;domain=d.domain;$('email').value=d.email;$('inbox').textContent='في انتظار الرسائل الواردة...';toast('✓ تم إنشاء بريد مؤقت جديد');await refreshInbox()}catch(e){$('email').value='خطأ في الاتصال بالخادم';$('inbox').innerHTML='<span style="color:#ff3b5c">تعذر إنشاء البريد</span><div style="font-size:.72rem;margin-top:8px">'+esc(e.message)+'</div>';toast('تعذر إنشاء البريد',true)}finally{$('newBtn').disabled=false}}
+async function refreshInbox(){
+if(!login||!domain)return;let b=$('refreshBtn'),old=b.innerHTML;b.disabled=true;b.innerHTML='<span class="spin">🔄</span>';
+try{let d=await jsonFetch('/api/messages?login='+encodeURIComponent(login)+'&domain='+encodeURIComponent(domain));let ms=d.messages||[];if(!ms.length){$('inbox').className='center';$('inbox').textContent='لا توجد رسائل جديدة حالياً.';return}$('inbox').className='';$('inbox').innerHTML=ms.map(m=>`<div class="msg" onclick="readMessage(${Number(m.id)})"><div class="from">${esc(m.from)}</div><div class="subject">${esc(m.subject||'بدون موضوع')}</div></div>`).join('')}catch(e){toast('تعذر جلب الرسائل: '+e.message,true)}finally{b.disabled=false;b.innerHTML=old}}
+async function readMessage(id){$('modal').classList.add('show');$('content').innerHTML='<div class="center">جاري قراءة الرسالة...</div>';try{let d=await jsonFetch('/api/message?login='+encodeURIComponent(login)+'&domain='+encodeURIComponent(domain)+'&id='+encodeURIComponent(id)),m=d.message||{};$('content').innerHTML=`<div class="meta"><div><b>من:</b> ${esc(m.from)}</div><div><b>الموضوع:</b> ${esc(m.subject||'بدون موضوع')}</div><div><b>التاريخ:</b> ${esc(m.date||'غير معروف')}</div></div><div class="body">${esc(m.textBody||'الرسالة فارغة')}</div>`}catch(e){$('content').innerHTML='<div class="center" style="color:#ff3b5c">تعذر قراءة الرسالة<br><small>'+esc(e.message)+'</small></div>'}}
+function closeMessage(){$('modal').classList.remove('show')}function closeModal(e){if(e.target.id==='modal')closeMessage()}
+async function copyEmail(){let v=$('email').value;if(!v.includes('@'))return toast('لا يوجد بريد صالح',true);try{await navigator.clipboard.writeText(v)}catch{let x=$('email');x.select();document.execCommand('copy')}toast('✓ تم نسخ البريد')}
+async function start(){await check();await newMail();clearInterval(timer);timer=setInterval(refreshInbox,10000)}start();
+</script>
+</body>
+</html>
