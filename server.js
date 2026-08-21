@@ -5,7 +5,6 @@ const PORT = process.env.PORT || 8080;
 
 app.use(express.static(__dirname));
 
-// ذاكرة سريعة لربط البريد بالرمز الخاص به تلقائياً
 const tokenStore = new Map();
 
 function requestMailTm(path, method = "GET", body = null, token = null) {
@@ -63,7 +62,6 @@ app.get("/api/new", async (req, res) => {
     const tokenData = await requestMailTm("/token", "POST", { address: fullEmail, password });
 
     if (tokenData && tokenData.token) {
-      // حفظ التوكن بالذاكرة لاستخدامه عند جلب الرسائل
       tokenStore.set(fullEmail.toLowerCase(), tokenData.token);
       tokenStore.set(randomUser.toLowerCase(), tokenData.token);
     }
@@ -94,8 +92,8 @@ app.get("/api/messages", async (req, res) => {
     const rawMsgs = parsed["hydra:member"] || [];
     const messages = rawMsgs.map((m) => ({
       id: m.id,
-      from: m.from.address,
-      subject: m.subject,
+      from: m.from && m.from.address ? m.from.address : (m.from || "غير معروف"),
+      subject: m.subject || "بدون عنوان",
       date: m.createdAt
     }));
     res.json({ success: true, messages });
@@ -113,15 +111,20 @@ app.get("/api/message", async (req, res) => {
 
   try {
     const m = await requestMailTm(`/messages/${id}`, "GET", null, token);
+    
+    // المعالجة الآمنة لحقل المرسل ونشر محتوى الرسالة
+    const senderAddress = m.from && m.from.address ? m.from.address : (typeof m.from === "string" ? m.from : "غير معروف");
+    const mailContent = (Array.isArray(m.html) && m.html[0]) ? m.html[0] : (m.text || "لا يوجد محتوى للرسالة");
+
     res.json({
       success: true,
       message: {
         id: m.id,
-        from: m.from.address,
-        subject: m.subject,
+        from: senderAddress,
+        subject: m.subject || "بدون عنوان",
         date: m.createdAt,
-        body: m.html ? m.html[0] : m.text,
-        textBody: m.text
+        body: mailContent,
+        textBody: m.text || mailContent
       }
     });
   } catch (e) {
