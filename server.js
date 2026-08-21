@@ -90,12 +90,15 @@ app.get("/api/messages", async (req, res) => {
   try {
     const parsed = await requestMailTm("/messages", "GET", null, token);
     const rawMsgs = parsed["hydra:member"] || [];
-    const messages = rawMsgs.map((m) => ({
-      id: m.id,
-      from: m.from && m.from.address ? m.from.address : (m.from || "غير معروف"),
-      subject: m.subject || "بدون عنوان",
-      date: m.createdAt
-    }));
+    const messages = rawMsgs.map((m) => {
+      const fromAddr = m.from?.address || m.from?.name || "مرسل مجهول";
+      return {
+        id: m.id,
+        from: fromAddr,
+        subject: m.subject || "بدون عنوان",
+        date: m.createdAt || m.updatedAt || new Date().toISOString()
+      };
+    });
     res.json({ success: true, messages });
   } catch (e) {
     res.json({ success: true, messages: [] });
@@ -112,9 +115,20 @@ app.get("/api/message", async (req, res) => {
   try {
     const m = await requestMailTm(`/messages/${id}`, "GET", null, token);
     
-    // المعالجة الآمنة لحقل المرسل ونشر محتوى الرسالة
-    const senderAddress = m.from && m.from.address ? m.from.address : (typeof m.from === "string" ? m.from : "غير معروف");
-    const mailContent = (Array.isArray(m.html) && m.html[0]) ? m.html[0] : (m.text || "لا يوجد محتوى للرسالة");
+    // استخراج عنوان المرسل بدقة
+    const senderAddress = m.from?.address || m.from?.name || "مرسل مجهول";
+    
+    // استخراج نص الرسالة أو HTML أو المقدمة
+    let bodyText = "";
+    if (Array.isArray(m.html) && m.html.length > 0 && m.html[0]) {
+      bodyText = m.html[0];
+    } else if (m.text) {
+      bodyText = m.text;
+    } else if (m.intro) {
+      bodyText = m.intro;
+    } else {
+      bodyText = "لا يوجد محتوى للرسالة";
+    }
 
     res.json({
       success: true,
@@ -122,9 +136,9 @@ app.get("/api/message", async (req, res) => {
         id: m.id,
         from: senderAddress,
         subject: m.subject || "بدون عنوان",
-        date: m.createdAt,
-        body: mailContent,
-        textBody: m.text || mailContent
+        date: m.createdAt || m.updatedAt || new Date().toISOString(),
+        body: bodyText,
+        textBody: m.text || m.intro || bodyText
       }
     });
   } catch (e) {
